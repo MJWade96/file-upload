@@ -5,16 +5,33 @@ const SIZE = 200 * 1024;
 // 工作线程
 const worker = new Worker(new URL('hash.js', import.meta.url));
 
-function handleFile(event) {
+async function handleFile(event) {
+  // 获取文件
   const file = event.currentTarget.files;
-  const fileChunkList = createFileChunk(file);
+  // 创建文件切片
+  let fileChunkList = createFileChunk(file);
+  // 获取文件哈希值
   worker.postMessage({ fileChunkList });
+  const calcFileHash = new Promise(resolve => {
+    worker.addEventListener('message', (event) => {
+      if (event.hash) resolve(hash);
+    })
+  })
+  const fileHash = await calcFileHash;
+  // 完善切片信息
+  fileChunkList = fileChunkList.map((chunk, index) => ({
+    fileHash: fileHash, // 文件哈希值（用于标识所属文件）
+    index, // 切片索引（用于合并时排序）
+    hash: `${container.hash}-${index}`, // 切片哈希值（文件哈希值 + 索引）
+    chunk, // 切片文件数据
+    size: chunk.size, // 切片大小
+  }))
 }
 
 // 生成文件切片
 function createFileChunk(file, size = SIZE) {
   const fileChunkList = []
-  let cur = 0 // 当前截取位置
+  let cur = 0; // 当前截取位置
   while (cur < file.size) {
     // 推入对象而不是直接推入切片的原因：
     // 后续需要添加
