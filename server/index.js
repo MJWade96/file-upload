@@ -1,0 +1,15 @@
+import http from 'http'
+import controller from './controller.js';
+
+const server = http.createServer()
+server.listen(9999);
+server.on("request", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*")
+  res.setHeader("Access-Control-Allow-Headers", "*")
+  if (req.method === "OPTIONS") {
+    res.status = 200
+    res.end()
+    return
+  }
+  if (req.url === '/') controller.handleFormData(req, res);
+});
