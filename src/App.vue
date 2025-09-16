@@ -7,7 +7,7 @@ const worker = new Worker(new URL('hash.js', import.meta.url));
 
 async function handleFile(event) {
   // 获取文件
-  const file = event.currentTarget.files;
+  const file = event.currentTarget.files[0];
   // 创建文件切片
   let fileChunkList = createFileChunk(file);
   // 获取文件哈希值
@@ -22,7 +22,7 @@ async function handleFile(event) {
   fileChunkList = fileChunkList.map((chunk, index) => ({
     fileHash: fileHash, // 文件哈希值（用于标识所属文件）
     index, // 切片索引（用于合并时排序）
-    hash: `${container.hash}-${index}`, // 切片哈希值（文件哈希值 + 索引）
+    hash: `${fileHash}-${index}`, // 切片哈希值（文件哈希值 + 索引）
     chunk, // 切片文件数据
     size: chunk.size, // 切片大小
   }))
@@ -43,6 +43,39 @@ function createFileChunk(file, size = SIZE) {
     cur += size // 移动到下一切片的起始位置
   }
   return fileChunkList
+}
+
+async function upload(file, fileChunkList) {
+  fileChunkList.map(item => {
+    const formData = new FormData();
+    const { chunk, hash, fileHash, index } = item;
+    // 切片文件
+    formData.set('chunk', chunk)
+    // 切片文件hash
+    formData.set('hash', hash)
+    // 大文件的文件名
+    formData.set('filename', file.name)
+    // 大文件hash
+    formData.set('fileHash', fileHash)
+    return { formData, index }
+  }).map(async ({ formData, index }) =>
+    request({
+      url: 'http://localhost:9999',
+      data: formData,
+    })
+  )
+  // 并发上传
+  await Promise.all(requestList)
+}
+
+function request({
+  url,
+  method = 'post',
+  data,
+}) {
+  const xhr = new XMLHttpRequest();
+  xhr.open(method, url);
+  xhr.send(data);
 }
 </script>
 
