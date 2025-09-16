@@ -1,22 +1,19 @@
 import SparkMD5 from 'spark-md5'
 
 self.onmessage = e => {
-    console.log('Worker received message:', e.data);
-    const { fileChunkList } = e.data
+        const { fileChunkList } = e.data
     const spark = new SparkMD5.ArrayBuffer() // 创建SparkMD5实例
     let percentage = 0 // 计算进度
     const percentInterval = 100 / fileChunkList.length;
     let count = 0 // 已处理的切片数量
     
-    console.log('Starting hash calculation for', fileChunkList.length, 'chunks');
-
+    
     // 开始处理第一个切片
     loadNext(count)
 
     // 递归处理所有切片
     async function loadNext(index) {
-        console.log('Processing chunk', index);
-        const fileChunk = fileChunkList[index].chunk;
+                const fileChunk = fileChunkList[index].chunk;
         // 读取当前切片的ArrayBuffer
         const chunkBuffer = await fileChunk.arrayBuffer();
         // 将当前切片的内容添加到哈希计算中
@@ -30,8 +27,7 @@ self.onmessage = e => {
         } else {
             // 处理完所有切片后，计算最终hash
             const hash = spark.end(); // 生成最终hash值
-            console.log('Hash calculation completed:', hash);
-            self.postMessage({
+                        self.postMessage({
                 percentage: 100,
                 hash: hash
             })
