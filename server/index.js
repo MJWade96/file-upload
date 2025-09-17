@@ -11,5 +11,6 @@ server.on("request", (req, res) => {
     res.end()
     return
   }
-  if (req.url === '/') controller.handleFormData(req, res);
+  if (req.url === '/') return controller.handleFormData(req, res);
+  if (req.url === '/merge') return controller.handleMerge(req, res);
 });

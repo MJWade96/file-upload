@@ -1,7 +1,7 @@
 <script setup>
 // 定义切片大小为 200KB（可根据需求调整）
 const SIZE = 200 * 1024;
-
+let fileHash;
 // 工作线程
 const worker = new Worker(new URL('hash.js', import.meta.url), { type: 'module' });
 
@@ -22,7 +22,7 @@ async function handleFile(event) {
       }
     })
   })
-  const fileHash = await calcFileHash;
+  fileHash = await calcFileHash;
 
   // 完善切片信息
   fileChunkList = fileChunkList.map(({ chunk }, index) => ({
@@ -71,8 +71,22 @@ async function uploadChunks(file, fileChunkList) {
       data: formData,
     })
   )
-  // 并发上传
-  await Promise.all(requestList);
+  await Promise.all(requestList);  // 并发上传
+  mergeRequest(SIZE, fileHash, file.name) // 合并切片请求
+}
+
+async function mergeRequest(chunkSize, fileHash, filename) {
+  request({
+    url: 'http://localhost:9999/merge',
+    headers: {
+      'content-type': 'application/json',
+    },
+    data: JSON.stringify({
+      chunkSize,
+      fileHash,
+      filename
+    }),
+  })
 }
 
 function request({
@@ -80,9 +94,12 @@ function request({
   method = 'post',
   data,
 }) {
-  const xhr = new XMLHttpRequest();
-  xhr.open(method, url);
-  xhr.send(data);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.send(data);
+    xhr.onload = resolve;
+  })
 }
 </script>
 
