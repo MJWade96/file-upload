@@ -37,18 +37,25 @@ async function handleFormData(request, response) {
 	})
 }
 
-async function handleVerify(request, response) {
+async function handleVerification(request, response) {
 	// 读取请求主体
 	const body = await getFileData(request);
 	// 提取请求主体中的数据
-	const { fileHash } = body;
+	const { fileHash, fileName } = body;
+	// 检查文件是否已存在, 如果已存在, 则直接返回, 实现秒传
+	const filePath = path.resolve(UPLOAD_DIR, `${fileHash}${path.extname(fileName)}`);
+	if (fse.existsSync(filePath)) {
+		response.end(JSON.stringify({ uploaded: true }));
+		return;
+	}
+
 	const chunkDir = path.resolve(UPLOAD_DIR, fileHash);
 	if (!fse.existsSync(chunkDir)) {
-		response.end(JSON.stringify({ data: [] }));
+		response.end(JSON.stringify({ uploaded: false, uploadedChunks: [] }));
 		return;
 	}
 	const chunkPaths = await fse.readdir(chunkDir);
-	response.end(JSON.stringify({ data: chunkPaths }));
+	response.end(JSON.stringify({ uploaded: true, uploadedChunks: chunkPaths }));
 }
 
 async function handleMerge(request, response) {
@@ -60,11 +67,11 @@ async function handleMerge(request, response) {
 	await createFile(chunkSize, fileHash, filename)
 	response.end()
 }
-async function createFile(chunkSize, fileHash, filename) {
+async function createFile(chunkSize, fileHash, fileName) {
 	const chunkDir = path.resolve(UPLOAD_DIR, fileHash)
 	const chunkPaths = await fse.readdir(chunkDir)
 	chunkPaths.sort((a, b) => +a.split('-')[1] - +b.split('-')[1])
-	const filePath = path.resolve(UPLOAD_DIR, filename)
+	const filePath = path.resolve(UPLOAD_DIR, `${fileHash}${path.extname(fileName)}`)
 	// 使用Promise.all并发处理所有切片的合并操作
 	await Promise.all(
 		chunkPaths.map((chunkPath, index) => {
@@ -95,6 +102,6 @@ const pipeStream = (readStream, writeStream) => {
 
 export default {
 	handleFormData,
-	handleVerify,
+	handleVerification,
 	handleMerge
 }

@@ -41,8 +41,12 @@ async function handleFile(event) {
 }
 
 async function handleUpload() {
-    // 获取已上传的切片
-  const uploadedChunks = await getUploadedChunks(fileHash);
+  // 获取已上传的切片
+  const { uploaded, uploadedChunks } = await verifyUploadedFile(fileHash, file.name);
+  if(uploaded) { 
+    console.log('文件已上传');
+    return;
+  }
   // 过滤出未上传的切片
   const unuploadedChunks = fileChunkList.filter(chunk => !uploadedChunks.includes(chunk.hash));
   // 调用上传函数
@@ -64,15 +68,15 @@ function createFileChunk(file, size = SIZE) {
   return fileChunkList
 }
 
-async function getUploadedChunks(fileHash) {
-  const { data: uploadedChunks } = await request({
+async function verifyUploadedFile(fileHash, fileName) {
+  const { uploaded, uploadedChunks } = await request({
     url: 'http://localhost:9999/verify',
     headers: {
       'content-type': 'application/json',
     },
-    data: JSON.stringify({ fileHash })
+    data: JSON.stringify({ fileHash, fileName })
   })
-  return uploadedChunks;
+  return { uploaded, uploadedChunks };
 }
 
 async function uploadChunks(file, fileChunkList) {
