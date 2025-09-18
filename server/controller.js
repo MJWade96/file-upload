@@ -23,6 +23,43 @@ function getFileData(request) {
 			})
 	})
 }
+async function handleFormData(request, response) {
+	const multipart = new multiparty.Form()
+	multipart.parse(request, async (err, fields, files) => {
+		const [chunk] = files.chunk
+		const [hash] = fields.hash
+		const [fileHash] = fields.fileHash
+
+		const chunkDir = path.resolve(UPLOAD_DIR, fileHash)
+		await fse.mkdirs(chunkDir) // 创建切片目录
+		await fse.move(chunk.path, path.resolve(chunkDir, hash))
+		response.end()
+	})
+}
+
+async function handleVerify(request, response) {
+	// 读取请求主体
+	const body = await getFileData(request);
+	// 提取请求主体中的数据
+	const { fileHash } = body;
+	const chunkDir = path.resolve(UPLOAD_DIR, fileHash);
+	if (!fse.existsSync(chunkDir)) {
+		response.end(JSON.stringify({ data: [] }));
+		return;
+	}
+	const chunkPaths = await fse.readdir(chunkDir);
+	response.end(JSON.stringify({ data: chunkPaths }));
+}
+
+async function handleMerge(request, response) {
+	// 读取请求主体
+	const body = await getFileData(request);
+	// 提取请求主体中的数据
+	const { chunkSize, fileHash, filename } = body;
+	// 创建文件
+	await createFile(chunkSize, fileHash, filename)
+	response.end()
+}
 async function createFile(chunkSize, fileHash, filename) {
 	const chunkDir = path.resolve(UPLOAD_DIR, fileHash)
 	const chunkPaths = await fse.readdir(chunkDir)
@@ -46,15 +83,7 @@ async function createFile(chunkSize, fileHash, filename) {
 	// 删除切片目录`
 	await fse.rm(chunkDir, { recursive: true });
 }
-async function handleMerge(request, response) {
-	// 读取请求主体
-	const body = await getFileData(request);
-	// 提取请求主体中的数据
-	const { chunkSize, fileHash, filename } = body;
-	// 创建文件
-	await createFile(chunkSize, fileHash, filename)
-	response.end()
-}
+
 const pipeStream = (readStream, writeStream) => {
 	return new Promise(resolve => {
 		// 将可读流pipe到可写流，实现文件内容的复制
@@ -63,21 +92,9 @@ const pipeStream = (readStream, writeStream) => {
 		readStream.on('end', resolve)
 	})
 }
-async function handleFormData(request, response) {
-	const multipart = new multiparty.Form()
-	multipart.parse(request, async (err, fields, files) => {
-		const [chunk] = files.chunk
-		const [hash] = fields.hash
-		const [fileHash] = fields.fileHash
-
-		const chunkDir = path.resolve(UPLOAD_DIR, fileHash)
-		await fse.mkdirs(chunkDir) // 创建切片目录
-		await fse.move(chunk.path, path.resolve(chunkDir, hash))
-		response.end()
-	})
-}
 
 export default {
 	handleFormData,
+	handleVerify,
 	handleMerge
 }

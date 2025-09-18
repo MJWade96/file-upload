@@ -1,20 +1,24 @@
 <script setup>
+import { ref } from 'vue';
 // 定义切片大小为 200KB（可根据需求调整）
 const SIZE = 200 * 1024;
+let file;
+let fileChunkList;
+const requestList = [];
+const hash = ref('');
 let fileHash;
 // 工作线程
 const worker = new Worker(new URL('hash.js', import.meta.url), { type: 'module' });
 
 async function handleFile(event) {
   // 获取文件
-  const file = event.currentTarget.files[0];
+  file = event.currentTarget.files[0];
 
   // 创建文件切片
-  let fileChunkList = createFileChunk(file);
+  fileChunkList = createFileChunk(file);
 
   // 获取文件哈希值
   worker.postMessage({ fileChunkList });
-
   const calcFileHash = new Promise(resolve => {
     worker.addEventListener('message', (event) => {
       if (event.data.hash) {
@@ -23,6 +27,7 @@ async function handleFile(event) {
     })
   })
   fileHash = await calcFileHash;
+  hash.value = fileHash;
 
   // 完善切片信息
   fileChunkList = fileChunkList.map(({ chunk }, index) => ({
@@ -32,9 +37,16 @@ async function handleFile(event) {
     chunk, // 切片文件数据
     size: chunk.size, // 切片大小
   }))
+  handleUpload();
+}
 
+async function handleUpload() {
+    // 获取已上传的切片
+  const uploadedChunks = await getUploadedChunks(fileHash);
+  // 过滤出未上传的切片
+  const unuploadedChunks = fileChunkList.filter(chunk => !uploadedChunks.includes(chunk.hash));
   // 调用上传函数
-  uploadChunks(file, fileChunkList);
+  uploadChunks(file, unuploadedChunks);
 }
 
 // 生成文件切片
@@ -50,6 +62,17 @@ function createFileChunk(file, size = SIZE) {
     cur += size // 移动到下一切片的起始位置
   }
   return fileChunkList
+}
+
+async function getUploadedChunks(fileHash) {
+  const { data: uploadedChunks } = await request({
+    url: 'http://localhost:9999/verify',
+    headers: {
+      'content-type': 'application/json',
+    },
+    data: JSON.stringify({ fileHash })
+  })
+  return uploadedChunks;
 }
 
 async function uploadChunks(file, fileChunkList) {
@@ -89,22 +112,34 @@ async function mergeRequest(chunkSize, fileHash, filename) {
   })
 }
 
+function stopUpload() {
+  requestList.map(request => request.abort());
+}
+
 function request({
   url,
   method = 'post',
   data,
 }) {
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const xhr = new XMLHttpRequest();
+    requestList.push(xhr);
+    xhr.responseType = 'json';
     xhr.open(method, url);
     xhr.send(data);
-    xhr.onload = resolve;
+    xhr.onload = () => {
+      requestList.splice(requestList.indexOf(xhr), 1);
+      resolve(xhr.response);
+    };
   })
 }
 </script>
 
 <template>
   <input type="file" @change="handleFile">
+  <p>文件哈希值：{{ hash }}</p>
+  <button @click="stopUpload">停止上传</button>
+  <button @click="handleUpload">恢复上传</button>
 </template>
 
 <style scoped></style>
